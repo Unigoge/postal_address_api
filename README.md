@@ -10,22 +10,27 @@ Additional configuration and routing metadata has to be mantained to provide inf
 
 GET
 
-expects URL that end as "../424+South+Maple+Ave+Basking+Ridge+NJ+07920?language=en&country=us" (could also use %20 for spaces or any other common URL encoding)
-language and country query parameters are optional
+expects URL that end as `"../424+South+Maple+Ave+Basking+Ridge+NJ+07920?language=en&country=us"` (could also use `%20` for spaces or any other common URL encoding)
+
+"language" and "country" query parameters are optional
 
 POST
 
 expects JSON body with an array of JSON objects:
+```
 [
     { "address": "424 South Maple Ave Basking Ridge NJ 07920", "language": "en", "country": "us" },
     { "address": "119 w 24th st, New York, NY", "language": "en" },
 ]
+```
 
 "language" and "country" attributes are optional
 
 PUT
 
 expects JSON object with following attributes:
+
+```
 {
     "address": "424 South Maple Ave Basking Ridge NJ 07920",
     "language": "en", 
@@ -33,6 +38,7 @@ expects JSON object with following attributes:
     "lat": 40.6863623,
     "lng": -74.53439190000002,
 }
+```
 
 "language", "country", "lat", "lng" attributes are optional
 
@@ -40,8 +46,9 @@ The address is expected to be free of typos and it should include all essential 
 
 DELETE
 
-expects URL that end as "../424+South+Maple+Ave+Basking+Ridge+NJ+07920?language=en&country=us" (could also use %20 for spaces or any other common URL encoding)
-language and country query parameters are optional
+expects URL that end as `"../424+South+Maple+Ave+Basking+Ridge+NJ+07920?language=en&country=us"` (could also use `%20` for spaces or any other common URL encoding)
+
+"language" and "country" query parameters are optional
 
 The address is expected to be free of typos and it should include all essential parts and postal code
 
@@ -59,6 +66,8 @@ street address. Since all valid address options are assigned a "weight" (based o
 with highest "weigth" is returned.
  
 Data structures:
+
+```
 {
  address = {
   country,       (optional)
@@ -93,6 +102,7 @@ Data structures:
   }
  }
 }
+```
 
 Routing metatable for address lookups is a part of API's configuration.
 It could be stored remotely (in Git) and APIs instances could load it on demand
@@ -104,6 +114,7 @@ Only Nginx Shared Dictionaries driver is implemented at this moment. Drivers for
 could be implemented in the future.
 
 Format:
+```
 {
   routing_tag1 = {
     "driver" = "nginx_shared_lookup",
@@ -119,6 +130,7 @@ Format:
     }
   }  
 }
+```
 
 # Class "places":
 
@@ -137,13 +149,17 @@ This class should communicate with database and could execute SQL queries on sev
   
 The "state" database table should include following columns:
 
+```
 | "city name" | "city alternative name" | "state name" | "postal_code" | "routing_tag" |
+```
 
 if "routing_tag" is empty it is assumed to be equal to "postal_code"
 
 The "common_names" database table should include following columns
 
+```
 | "common_name" | "place_type" | "city name" | "state name" | "country name" | "postal_code" | "routing_tag" |
+```
 
 where "place_type" should be an element of enumeration of { "house", "city", "city_district", "state", "country" }
 
@@ -166,6 +182,7 @@ more time reading about it - but on the surface it is based on the most complete
 There are multiple language binding for this library (including my favorite Lua -  https://github.com/bungle/lua-resty-postal ).
 Or it can be used directly from written in C handler (Nginx- or Apache-module). 
 
+```
 libpostal.parse_address( "119 west 24th street new york ny" )
 returns table:
 {
@@ -191,5 +208,5 @@ returns iterator which returns strings
 119 w 24th street new york new york
 119 west 24th street new york new york
 119 west 24th street new york ny
-
+```
      
