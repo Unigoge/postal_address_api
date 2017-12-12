@@ -367,6 +367,9 @@ function _handler.process_address_insert_request( params )
             if not ok or not google_response_object or type(google_response_object) ~= "table" then
                 ngx.log( ngx.INFO, "Postal Address API - Unable to parse Google JSON" );
             else
+                if google_response_object.results and google_response_object.results[1] then
+                    google_response_object = google_response_object.results[1];
+                end
                 if google_response_object.geometry and google_response_object.geometry.location 
                     and google_response_object.geometry.location.lat and google_response_object.geometry.location.lng then
                     

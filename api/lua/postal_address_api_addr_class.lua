@@ -1,6 +1,9 @@
 local cjson = require "cjson"
 local pretty_json = require "JSON";
 
+local resty_sha256 = require "resty.sha256";
+local resty_strings = require "resty.string";
+
 local utils = require "utils";
 local libpostal = require "postal";
 
@@ -52,7 +55,7 @@ local lookup_routing_table = {
   ["10001"] = {
     ["driver"] = "nginx_shared_lookup",
     ["config"] = {
-        ["shared_dictionary_name"] = "default_postal_lookup_dict"
+        ["shared_dictionary_name"] = "newyork10001"
     }
   },
   ["default"] = {
@@ -208,7 +211,9 @@ Data structures:
   {
     ...
   }
- }
+ },
+ validated_addresses_map = {}; -- collects full addresses for all validated places
+ 
 --]]
 
 function _address.get_new_address( address_string, language, country )
@@ -254,10 +259,11 @@ function _address.get_new_address( address_string, language, country )
     
     return setmetatable( { 
                             _data = {
-                                address         = address_table,
-                                address_options = {},
-                                language        = language,
-                                country         = country
+                                address                 = address_table,
+                                address_options         = {},
+                                validated_addresses_map = {},
+                                language                = language,
+                                country                 = country
                             }
                          }, mt);
 end
@@ -269,25 +275,53 @@ function _address.format_to_string( address_object )
         address_string = address_object.house;
     end
     if address_object.house_number then
-        address_string = address_string .. " " .. address_object.house_number;
+        if #address_string == 0 then
+            address_string = address_object.house_number;
+        else
+            address_string = address_string .. " " .. address_object.house_number;
+        end
     end
     if address_object.road then
-        address_string = address_string .. " " .. address_object.road;
+        if #address_string == 0 then
+            address_string = address_object.road;
+        else
+            address_string = address_string .. " " .. address_object.road;
+        end
     end
     if address_object.city_district then
-        address_string = address_string .. " " .. address_object.city_district;
+        if #address_string == 0 then
+            address_string = address_object.city_district;
+        else
+            address_string = address_string .. ", " .. address_object.city_district;
+        end
     end
     if address_object.city then
-        address_string = address_string .. " " .. address_object.city;
+        if #address_string == 0 then
+            address_string = address_object.city;
+        else
+            address_string = address_string .. ", " .. address_object.city;
+        end
     end
     if address_object.state then
-        address_string = address_string .. " " .. address_object.state;
-    end
-    if address_object.country then
-        address_string = address_string .. " " .. address_object.country;
+        if #address_string == 0 then
+            address_string = address_object.state;
+        else
+            address_string = address_string .. ", " .. address_object.state;
+        end
     end
     if address_object.postcode then
-        address_string = address_string .. " " .. address_object.postcode;
+        if #address_string == 0 then
+            address_string = address_object.postcode;
+        else
+            address_string = address_string .. ", " .. address_object.postcode;
+        end
+    end
+    if address_object.country then
+        if #address_string == 0 then
+            address_string = address_object.country;
+        else
+            address_string = address_string .. " " .. address_object.country;
+        end
     end
 
     return address_string;
@@ -300,7 +334,10 @@ end
 function _address.expand_address( self )
 
     local error_message = nil;
+    
+    --
     -- the first step - use libpostal.expand_address to populate address_options
+    --
     local ok, expanded_results_reader = pcall( libpostal.expand_address, _address.format_to_string( self._data.address ),{ languages = { self._data.language } } );
     if ok and type( expanded_results_reader ) == "function" then -- it returns an iterator
         local result = expanded_results_reader();
@@ -308,7 +345,7 @@ function _address.expand_address( self )
             local ok, address_option = pcall( libpostal.parse_address, result, self._data.language, self._data.country );
             if ok then
                 -- chek if it contains at least some of required information
-                if address_option.road and ( address_option.house_number or address_option.house ) then
+                if ( address_option.road and address_option.house_number ) or address_option.house then
                     local address_table = {};
                     address_table.country       = address_option.country;
                     address_table.city          = address_option.city;
@@ -330,6 +367,9 @@ function _address.expand_address( self )
         error_message = "unable to expand address";
     end
     
+    --
+    -- second step - validate addresses from address_options
+    --
     local places = postal_address_places_class.new();
     
     if #self._data.address_options == 0 then
@@ -397,8 +437,31 @@ function _address.expand_address( self )
                 if address_option.house then
                     address_option.weight = address_option.weight + 1;
                 end
-                                
+                
+                --
+                -- add validated address option into validated_addresses_map
+                -- construct a key and sha256 it
+                local key = _address.format_to_string( address_option ) .. " " .. address_option.addresses_db_routing_tag;
+                
+                local sha256 = resty_sha256:new();
+                sha256:update( key );
+                local key_sha256 = sha256:final();
+                if not self._data.validated_addresses_map[ key_sha256 ] then
+                    self._data.validated_addresses_map[ key_sha256 ] = address_option;
+                end               
             end
+        end
+        
+        --
+        -- third step - reduce address options array to valid and unique only
+        --
+        -- all valid and unique address options should be referenced by validated_addresses_map at this point
+        -- should reconstruct address_options array from it
+        --
+        self._data.address_options = {}; -- discard existing data
+        local map_key, map_value;
+        for map_key, map_value in pairs( self._data.validated_addresses_map ) do
+            self._data.address_options[ #self._data.address_options + 1 ] = map_value;
         end
         
         -- sort address options accordingly to weight
