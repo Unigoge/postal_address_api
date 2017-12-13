@@ -258,6 +258,7 @@ function _address.get_new_address( address_string, language, country )
     address_table.house_number  = original_address.house_number;
     
     return setmetatable( { 
+                            _type = "__address",
                             _data = {
                                 address                 = address_table,
                                 address_options         = {},
@@ -329,6 +330,20 @@ end
 
 function _address.format_to_json( address_option_object )
 
+end
+
+function _address.update_address( address_class_object, address_object )
+
+    if address_class_object._type and address_class_object._type ~= "__address" then
+        return;
+    end
+    
+    if address_class_object._data and address_class_object._data.address then
+        utils.tableMerge( address_class_object._data.address, address_object );
+    else
+        -- just do it - no guarantees
+        utils.tableMerge( address_class_object, address_object );
+    end
 end
 
 function _address.expand_address( self )
@@ -404,7 +419,7 @@ function _address.expand_address( self )
                 -- validate_address could return additional address options
                 local addresses_db_routing_tag, alternative_address_options = places:validate_address( address_option, self._data.language, self._data.country );
                 address_option.addresses_db_routing_tag = addresses_db_routing_tag;
-                if alternative_address_options then
+                if alternative_address_options and type( alternative_address_options ) == "table" then
                     local idx, alternative_address_option;
                     for idx, alternative_address_option in ipairs( alternative_address_options ) do
                         self._data.address_options[ #self._data.address_options + 1 ] = alternative_address_option;
@@ -445,7 +460,7 @@ function _address.expand_address( self )
                 
                 local sha256 = resty_sha256:new();
                 sha256:update( key );
-                local key_sha256 = sha256:final();
+                local key_sha256 = resty_strings.to_hex( sha256:final() );
                 if not self._data.validated_addresses_map[ key_sha256 ] then
                     self._data.validated_addresses_map[ key_sha256 ] = address_option;
                 end               

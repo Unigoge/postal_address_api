@@ -45,13 +45,18 @@ This table links lookup DB's routing tag with lookup "driver" and its configurat
 ]]--
 
 local db_routing_table = {
-  ["mexico"] = {
+  ["canada"] = {
     ["driver"] = "google_map_api_lookup",
     ["config"] = {
         ["url"]  = "http://maps.googleapis.com/maps/api/geocode/json?sensor=false",
         ["method"] = "GET"
     }
   },
+  ["us"] = {
+    ["driver"] = "mock_data_lookup",
+    ["config"] = {
+    }
+  },  
   ["default"] = {
     ["driver"] = "mock_data_lookup",
     ["config"] = {
@@ -73,25 +78,161 @@ function _places.new()
                             _data = {
                                 validated_places_map = {},    -- for a life time of the object: collects all 
                                                               -- validated places - "city"."state"."postcode" as a key
-                                validated_addresses_map = {}  -- for a single validate_address() call: collects full
-                                                              -- addresses for validated places
                             }
                          }, mt);
 end
 
-function _places.validate_address( self, address_option_object, language, country )
+function _places.query_db( scope, address_object, country )
 
-    local found_routing_tag = nil;
-    local alternative_address_options = {};
-    
-    local verified_places = {};
-    
-    while( #verified_places == 0 ) do
-
-        break;
+    if db_routing_table then
+        if address_object.country then
+            country = address_object.country
+        elseif not country then
+            country = "default";
+        end
+        
+        
+        local routing_table = db_routing_table[ country ];
+        if not routing_table then
+            routing_table = db_routing_table[ "default" ];
+        end
+        if routing_table then
+            if routing_table.driver and routing_table.config and _places[ routing_table.driver ] then
+                return _places[ routing_table.driver ]( scope, address_object, routing_table.config );
+            end
+        else
+            ngx.log( ngx.INFO, "Postal Address API - unable to find routing table for country ", country );
+        end
     end
     
-    -- update address_option_object and process alternative_address_options if needed
+    return nil;
+end
+
+function _places.validate_address( self, address_object, language, country )
+
+    local found_routing_tag = nil;
+    local alternative_address_options = nil;
+    
+    local verified_places = {};
+    local address_options = {};
+    
+    if address_object.routing_tag then
+        return address_object.routing_tag;
+    end
+    
+    --
+    -- try to fetch from validated_places_map for input address_option_object
+    --
+    -- construct a key and sha256 it
+    local key;
+    if address_object.city_district and address_object.city and address_object.state then
+        key = address_object.city_district .. " " .. address_object.city .. " " .. address_object.state;
+    elseif address_object.city and address_object.state then
+        key = address_object.city .. " " .. address_object.state;
+    end
+    if key then
+        local sha256 = resty_sha256:new();
+        sha256:update( key );
+        local key_sha256 = resty_strings.to_hex( sha256:final() );
+        
+        if self._data.validated_places_map[ key_sha256 ] then
+            verified_places = self._data.validated_places_map[ key_sha256 ];
+        end
+    end        
+
+    
+    --
+    -- initialize queue of address options to verify
+    --
+    address_options[1] = utils.tablecopy( address_object );
+    
+    local loops_count = 5; -- should never take more than 5 runs to finish a search
+    while( #verified_places == 0 and #address_options ~= 0 and loops_count > 0 ) do
+
+        --
+        -- try searching "places" DB for - ("city_district" and "state) or ("city" and "state")
+        --
+        -- since address_options is a queue - always use address_options[1]
+        local fetched_places = _places.query_db( "states", address_options[1], country );
+        if fetched_places and type( fetched_places ) == "table" and #fetched_places ~= 0 then
+            local idx, place_record;
+            for idx, place_record in ipairs( fetched_places ) do
+                if place_record.postcode or place_record.routing_tag then
+                    verified_places[ #verified_places + 1 ] = utils.tablecopy( place_record );
+                end
+            end
+        else
+            -- not found!
+            --
+            -- need to search "common_names" now
+            --
+            local fetched_common_places = _places.query_db( "states", address_options[1], country );
+            if fetched_common_places and type( fetched_common_places ) == "table" and #fetched_common_places ~= 0 then
+                local idx, place_record;
+                for idx, place_record in ipairs( fetched_common_places ) do
+                    if place_record.postcode or place_record.routing_tag then
+                        --
+                        -- most likely got a "house" - a well known place
+                        --
+                        -- check if found place matches an attribute in address_option
+                        -- otherwise - just discard it
+                        if address_options[1][ place_record.type ] and address_options[1][ place_record.type ] == place_record.name then
+                            verified_places[ #verified_places + 1 ] = utils.tablecopy( place_record );
+                        end
+                    else
+                        -- need to push found place into address_options - it will get verified at one of the next iterations
+                        local new_address_option = utils.tablecopy( address_options[1] );
+                        utils.tableMerge( new_address_option, place_record );
+                        new_address_option.name = nil; -- remove artifacts
+                        new_address_option.type = nil;
+                        address_options[ #address_options + 1 ] = new_address_option;
+                    end
+                end
+            end            
+        end
+        table.remove( address_options, 1 ); -- move the queue forward
+        loops_count = loops_count - 1;
+    end
+    
+    -- update address_object and process alternative_address_options if needed
+    --
+    -- this version does not use "streets" class to reduce number of verified_places - not yet.
+    --
+    if #verified_places > 0 then
+        -- first element updates address that was passed as an argument
+        postal_address_addr_class.update_address( address_object, verified_places[1] );
+        found_routing_tag = verified_places[1].routing_tag;
+        
+        -- update validated_places_map
+        -- construct a key and sha256 it
+        local key;
+        if address_object.city_district and address_object.city and address_object.state then
+            key = address_object.city_district .. " " .. address_object.city .. " " .. address_object.state;
+        elseif address_object.city and address_object.state then
+            key = address_object.city .. " " .. address_object.state;
+        end
+        if key then
+            local sha256 = resty_sha256:new();
+            sha256:update( key );
+            local key_sha256 = resty_strings.to_hex( sha256:final() );
+            
+            if not self._data.validated_places_map[ key_sha256 ] then
+                self._data.validated_places_map[ key_sha256 ] = utils.tablecopy( verified_places ); 
+            end
+        end        
+        
+        -- construct alternative_address_options starting from 2nd validated_places element
+        local verified_places_length = #verified_places - 1;
+        if verified_places_length > 0 then
+            alternative_address_options = {};        
+            local idx = 2;
+            while idx <= verified_places_length do
+                local address_object_copy = utils.tablecopy( address_object );
+                postal_address_addr_class.update_address( address_object_copy, verified_places[ idx ] );
+                alternative_address_options[ #alternative_address_options + 1 ] = address_object_copy;
+            end
+        end
+    end
     
     return found_routing_tag, alternative_address_options;
 end
@@ -183,7 +324,7 @@ local mock_db_data = {
         ["new providence"] = {
             {
               ["city"]             = "new providence",
-              ["city_alternative"] = "",
+              ["city_alternative"] =  nil,
               ["state"]            = "new jersey",
               ["postcode"]         = "07974",
               ["routing_tag"]      = "default"
@@ -210,20 +351,11 @@ local mock_db_data = {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
               ["state"]            = "new york",
-              ["postcode"]         = "",
+              ["postcode"]         =  nil,
               ["routing_tag"]      = "default"
             }            
         },
-        ["new york city"] = { -- alternative city name
-            {
-              ["city"]             = "new york",
-              ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
-              ["postcode"]         = "",
-              ["routing_tag"]      = "default"
-            }
-        },
-        ["manhattan"] = { -- "city_district"
+        ["nyc"] = { -- alternative city name used as "city"
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
@@ -235,7 +367,30 @@ local mock_db_data = {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
               ["state"]            = "new york",
-              ["postcode"]         = "",
+              ["postcode"]         = "10011",
+              ["routing_tag"]      = "default"
+            },
+            {
+              ["city"]             = "new york",
+              ["city_alternative"] = "nyc",
+              ["state"]            = "new york",
+              ["postcode"]         =  nil,
+              ["routing_tag"]      = "default"
+            }            
+        },
+        ["manhattan"] = { -- "city_district" used as "city"
+            {
+              ["city"]             = "new york",
+              ["city_alternative"] = "nyc",
+              ["state"]            = "new york",
+              ["postcode"]         = "10001",
+              ["routing_tag"]      = "10001"
+            },
+            {
+              ["city"]             = "new york",
+              ["city_alternative"] = "nyc",
+              ["state"]            = "new york",
+              ["postcode"]         =  nil,
               ["routing_tag"]      = "default"
             }
         }            
@@ -246,16 +401,16 @@ local mock_db_data = {
             ["type"]        = "city_district",
             ["city"]        = "new york",
             ["state"]       = "ny",
-            ["country"]     = "usa",
-            ["postcode"]    = "",
-            ["routing_tag"] = ""
+            ["country"]     = "us",
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
         },
         ["empire state building"] = {
             ["name"]        = "empire state building",
             ["type"]        = "house",
             ["city"]        = "new york",
             ["state"]       = "ny",
-            ["country"]     = "usa",
+            ["country"]     = "us",
             ["postcode"]    = "10118",
             ["routing_tag"] = "default"
         },
@@ -264,45 +419,63 @@ local mock_db_data = {
             ["type"]        = "house",
             ["city"]        = "new york",
             ["state"]       = "ny",
-            ["country"]     = "usa",
+            ["country"]     = "us",
             ["postcode"]    = "10001",
             ["routing_tag"] = "10001"
         },
+        ["united states"] = {
+            ["name"]        = "united states",
+            ["type"]        = "country",
+            ["city"]        =  nil,
+            ["state"]       =  nil,
+            ["country"]     = "us",
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
+        },        
         ["new jersey"] = {
             ["name"]        = "new jersey",
             ["type"]        = "state",
-            ["city"]        = "",
+            ["city"]        =  nil,
             ["state"]       = "nj",
-            ["country"]     = "usa",
-            ["postcode"]    = "",
-            ["routing_tag"] = ""
+            ["country"]     = "us",
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
         },
         ["new york"] = {
             ["name"]        = "new york",
             ["type"]        = "state",
-            ["city"]        = "",
+            ["city"]        =  nil,
             ["state"]       = "ny",
-            ["country"]     = "usa",
-            ["postcode"]    = "",
-            ["routing_tag"] = ""
+            ["country"]     = "us",
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
+        },
+        ["new york city"] = {
+            ["name"]        = "new york city",
+            ["type"]        = "city",
+            ["city"]        = "new york",
+            ["state"]       = "ny",
+            ["country"]     = "us",
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
         },
         ["quebec"] = {
             ["name"]        = "quebec",
             ["type"]        = "state",
-            ["city"]        = "",
+            ["city"]        =  nil,
             ["state"]       = "qc",
             ["country"]     = "canada",
-            ["postcode"]    = "",
-            ["routing_tag"] = ""
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
         },        
         ["ontario"] = {
             ["name"]        = "ontario",
             ["type"]        = "state",
-            ["city"]        = "",
+            ["city"]        =  nil,
             ["state"]       = "ot",
             ["country"]     = "canada",
-            ["postcode"]    = "",
-            ["routing_tag"] = ""
+            ["postcode"]    =  nil,
+            ["routing_tag"] =  nil
         }                        
     }
 };
@@ -313,8 +486,16 @@ function _places.mock_data_lookup( scope, address_option_object, config )
         -- a fast lookup - "state" AND "city" ( AND "postcode" - optional )
         if address_option_object.state and mock_db_data[ address_option_object.state ] then
             local state_db = mock_db_data[ address_option_object.state ];
-            if address_option_object.city and state_db[ address_option_object.city ] then
-                local city_db = state_db[ address_option_object.city ];
+            local city_db = nil;
+
+            -- check for city_district first - it has higher priority
+            if address_option_object.city_district and state_db[ address_option_object.city_district ] then
+                city_db = state_db[ address_option_object.city_district ];
+            elseif address_option_object.city and state_db[ address_option_object.city ] then
+                city_db = state_db[ address_option_object.city ];
+            end
+            
+            if city_db then
                 if address_option_object.postcode then
                     local db_records = {};
                     local idx, record;
@@ -327,7 +508,7 @@ function _places.mock_data_lookup( scope, address_option_object, config )
                 else
                     -- done
                     return city_db;
-                end
+                end            
             end
         end
         
