@@ -13,7 +13,7 @@ local _address = {
 
 local mt = { __index = _address }
 
-local postal_address_places_class = require "postal_address_api_places_class";
+local postal_address_places_class = require "postal_address_places_class";
 
 --[[
 

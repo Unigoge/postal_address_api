@@ -1,5 +1,5 @@
 local utils = require "utils";
-local postal_addres_api_handler = require "postal_addres_api_handler";
+local postal_address_api_handler = require "postal_address_api_handler";
 
 local _router = {
     _VERSION = '0.01',
@@ -30,13 +30,13 @@ r:match({
         return "{ \"error\": \"Bad request - missing address\" }", 404;
       end,
             
-      [ "/address_lookup/*address" ] = postal_addres_api_handler.make_address_lookup_handler()
+      [ "/address_lookup/*address" ] = postal_address_api_handler.make_address_lookup_handler();
       
   },
 
   POST = {
   
-      [ "/address_lookup" ] = postal_addres_api_handler.make_address_lookup_batch_handler()
+      [ "/address_lookup" ] = postal_address_api_handler.make_address_lookup_batch_handler();
       
         
   },
@@ -51,7 +51,7 @@ r:match({
         return "{ \"error\": \"Bad request - missing address\" }", 404;
       end,
             
-      [ "/address_lookup/*address" ] = postal_addres_api_handler.make_address_insert_handler()
+      [ "/address_lookup/*address" ] = postal_address_api_handler.make_address_insert_handler();
       
   },
   
@@ -65,7 +65,7 @@ r:match({
         return "{ \"error\": \"Bad request - missing address\" }", 404;
       end,
             
-      [ "/address_lookup/*address" ] = postal_addres_api_handler.make_address_delete_handler()
+      [ "/address_lookup/*address" ] = postal_address_api_handler.make_address_delete_handler();
 
   }
   

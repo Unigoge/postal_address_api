@@ -221,7 +221,7 @@ end
 --
 
 local postal_address_addr_class = require "postal_address_api_addr_class";
-local postal_address_places_class = require "postal_address_api_places_class";
+local postal_address_places_class = require "postal_address_places_class";
 
 local MAXNUMBEROFTHREADS = 300;
 local MAXNUMBEROFTHREADSPERADDRESS = 5;

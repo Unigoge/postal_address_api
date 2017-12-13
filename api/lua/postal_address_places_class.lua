@@ -64,8 +64,6 @@ local db_routing_table = {
   }  
 };
 
-local postal_address_addr_class = require "postal_address_api_addr_class";
-
 local _places = {
     _VERSION = '0.01',
 }
@@ -119,6 +117,8 @@ function _places.validate_address( self, address_object, language, country )
     if address_object.routing_tag then
         return address_object.routing_tag;
     end
+    
+    local postal_address_addr_class = require "postal_address_api_addr_class";
     
     --
     -- try to fetch from validated_places_map for input address_option_object
