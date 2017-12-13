@@ -153,8 +153,10 @@ function _places.validate_address( self, address_object, language, country )
         -- try searching "places" DB for - ("city_district" and "state) or ("city" and "state")
         --
         -- since address_options is a queue - always use address_options[1]
+        ngx.log( ngx.INFO, "Postal Address API - quering DB for addres option:\n", utils.serializeTable( address_options[1] ) );
         local fetched_places = _places.query_db( "states", address_options[1], country );
         if fetched_places and type( fetched_places ) == "table" and #fetched_places ~= 0 then
+            ngx.log( ngx.INFO, "Postal Address API - found places:\n", utils.serializeTable( fetched_places ) );
             local idx, place_record;
             for idx, place_record in ipairs( fetched_places ) do
                 if place_record.postcode or place_record.routing_tag then
@@ -230,6 +232,7 @@ function _places.validate_address( self, address_object, language, country )
                 local address_object_copy = utils.tablecopy( address_object );
                 postal_address_addr_class.update_address( address_object_copy, verified_places[ idx ] );
                 alternative_address_options[ #alternative_address_options + 1 ] = address_object_copy;
+                idx = idx + 1;
             end
         end
     end

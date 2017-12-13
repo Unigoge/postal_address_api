@@ -294,7 +294,9 @@ function _handler.process_address_lookup_request( params )
             if running_threads == MAXNUMBEROFTHREADSPERADDRESS then
                 running_threads = utils.wait_for_any_thread( threads );
             end
-        end 
+        end
+        ngx.log( ngx.INFO, "Postal Address API - processing address_option #", option_number );
+        option_number = option_number + 1; 
     end
     
     utils.wait_for_all_threads( threads );
@@ -314,6 +316,7 @@ function _handler.process_address_lookup_request( params )
         option_number = 1;
         while( option_number <= address_object:get_number_of_address_options() ) do        
             address_options[ #address_options + 1 ] = address_object.format_to_string( address_object:get_address_option( option_number ) );
+            option_number = option_number + 1;
         end
         
         local response_json = pretty_json:encode_pretty( results );

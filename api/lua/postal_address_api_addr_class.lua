@@ -410,16 +410,20 @@ function _address.expand_address( self )
         end
     end
     
+    ngx.log( ngx.INFO, "Postal Address API - validating address options:\n", utils.serializeTable( self._data.address_options ) );
+    
     if #self._data.address_options ~= 0 then
         -- should try to validate places for all address options
         local idx, address_option;
         for idx, address_option in ipairs( self._data.address_options ) do
         
             if not address_option.addresses_db_routing_tag then
+                ngx.log( ngx.INFO, "Postal Address API - validating address option:\n", utils.serializeTable( address_option ) );
                 -- validate_address could return additional address options
                 local addresses_db_routing_tag, alternative_address_options = places:validate_address( address_option, self._data.language, self._data.country );
                 address_option.addresses_db_routing_tag = addresses_db_routing_tag;
                 if alternative_address_options and type( alternative_address_options ) == "table" then
+                    ngx.log( ngx.INFO, "Postal Address API - alternative address options:\n", utils.serializeTable( alternative_address_options ) );
                     local idx, alternative_address_option;
                     for idx, alternative_address_option in ipairs( alternative_address_options ) do
                         self._data.address_options[ #self._data.address_options + 1 ] = alternative_address_option;
@@ -467,6 +471,7 @@ function _address.expand_address( self )
             end
         end
         
+        ngx.log( ngx.INFO, "Postal Address API - validated addresses map:\n", utils.serializeTable( self._data.validated_addresses_map ) );
         --
         -- third step - reduce address options array to valid and unique only
         --
@@ -481,8 +486,9 @@ function _address.expand_address( self )
         
         -- sort address options accordingly to weight
         table.sort( self._data.address_options, function( a, b ) 
-            return a.weight < b.weight;
+            return a.weight > b.weight;
         end );
+        ngx.log( ngx.INFO, "Postal Address API - validated address_options:\n", utils.serializeTable( self._data.address_options ) );
     end
     
     return nil;
