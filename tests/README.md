@@ -1,2 +1,2 @@
-All tests are to be executed via /usr/sbin/resty in "headless" Nginx process
+All tests are to be executed via /usr/local/openresty/bin/resty in "headless" Nginx process
 
