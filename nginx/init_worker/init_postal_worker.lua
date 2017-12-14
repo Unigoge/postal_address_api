@@ -12,8 +12,10 @@ if ngx.worker.id() == 0 then
      local ok, err = "unknown";
      ok, err = ngx.timer.at( 0, function() -- need to run from timer context to enable Nginx sockets
      
-        local test_results = require "postal_address_api_tests";
-        ngx.log( ngx.INFO, "Postal API - finished running tests - results: ", utils.serializeTable( test_results ) );
+        local tests = require "postal_address_api_tests";
+        local tests_results = tests.run();
+         
+        ngx.log( ngx.INFO, "Postal API - finished running tests - results: ", utils.serializeTable( tests_results ) );
      end );
      if not ok then
         ngx.log( ngx.ERR, "Postal API - unable to start tests - error: ", err );

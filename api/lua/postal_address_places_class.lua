@@ -48,15 +48,17 @@ local db_routing_table = {
   ["canada"] = {
     ["driver"] = "google_map_api_lookup",
     ["config"] = {
-        ["url"]  = "http://maps.googleapis.com/maps/api/geocode/json?sensor=false",
-        ["method"] = "GET"
+        ["url"]  = "https://maps.googleapis.com/maps/api/geocode/json?sensor=false",
+        ["method"] = "GET",
+        ["key"] = "AIzaSyCYqvg4ihOlBEsgB823Mgtx5MQ7XXNs5K0"
     }
   },
   ["mexico"] = {
     ["driver"] = "google_map_api_lookup",
     ["config"] = {
-        ["url"]  = "http://maps.googleapis.com/maps/api/geocode/json?sensor=false",
-        ["method"] = "GET"
+        ["url"]  = "https://maps.googleapis.com/maps/api/geocode/json?sensor=false",
+        ["method"] = "GET",
+        ["key"] = "AIzaSyCYqvg4ihOlBEsgB823Mgtx5MQ7XXNs5K0"        
     }
   },
   ["us"] = {
@@ -102,6 +104,7 @@ function _places.query_db( scope, address_object, country )
             routing_table = db_routing_table[ "default" ];
         end
         if routing_table then
+            ngx.log( ngx.INFO, "Postal Address API - using driver ", routing_table.driver, " for country ", country );
             if routing_table.driver and routing_table.config and _places[ routing_table.driver ] then
                 return _places[ routing_table.driver ]( scope, address_object, routing_table.config );
             end
@@ -257,9 +260,12 @@ Mock data and Google API lookup drivers - for testing only
 
 function _places.google_map_api_lookup( scope, address_option_object, config )
 
-    local url = "http://maps.googleapis.com/maps/api/geocode/json?sensor=false";
+    local url = "https://maps.googleapis.com/maps/api/geocode/json?sensor=false";
     if config["url"] then
         url = config["url"];
+    end
+    if config["key"] then
+        url = url .. "&key=" .. config["key"];
     end
     
     if scope == "states" or scope == "common_names" then
@@ -274,6 +280,8 @@ function _places.google_map_api_lookup( scope, address_option_object, config )
         end
         
         address_query = "&address=" .. ngx.escape_uri( address_query );
+        url = url .. address_query;
+        -- ngx.log( ngx.INFO, "Postal Address API - sending Google API request to url ", url );
         local google_response, err = utils.send_http_req( url, {
                                           method = "GET",
                                           headers = {
@@ -283,9 +291,9 @@ function _places.google_map_api_lookup( scope, address_option_object, config )
         if not google_response then
             ngx.log( ngx.INFO, "Postal Address API - Google request error: ", err );
         else
-            local ok, google_response_object = pcall( cjson.decode, google_response );
+            local ok, google_response_object = pcall( cjson.decode, google_response.body );
             if not ok or not google_response_object or type(google_response_object) ~= "table" then
-                ngx.log( ngx.INFO, "Postal Address API - Unable to parse Google JSON" );
+                ngx.log( ngx.INFO, "Postal Address API - Unable to parse Google API JSON" );
             else
                 if google_response_object.results and google_response_object.results[1] then
                     google_response_object = google_response_object.results[1];
@@ -303,13 +311,14 @@ function _places.google_map_api_lookup( scope, address_option_object, config )
                             elseif type == "postal_code" then
                                 city_record["postcode"] = address_component["short_name"];
                             elseif type == "country" then
-                                city_record["country"] = address_component["short_name"];
+                                city_record["country"] = address_component["long_name"];
                             end
                         end
                     end
                     
                     if city_record["city"] then
-                        return city_record;
+                        city_record["routing_tag"] = city_record["postcode"];
+                        return { city_record };
                     else
                         return nil;
                     end
@@ -492,7 +501,7 @@ local mock_db_data = {
               ["name"]        = "mexico",
               ["type"]        = "city",
               ["city"]        = "mexico city",
-              ["state"]       = "df",
+              ["state"]       = "cdmx",
               ["country"]     = "mexico",
               ["postcode"]    =  nil,
               ["routing_tag"] =  nil

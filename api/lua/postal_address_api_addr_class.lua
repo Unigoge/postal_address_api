@@ -328,8 +328,35 @@ function _address.format_to_string( address_object )
     return address_string;
 end
 
-function _address.format_to_json( address_option_object )
+function _address.format_to_json( address_option_object, params )
 
+    local response_json_table = {};
+    response_json_table["address"] = _address.format_to_string( address_option_object );
+    if address_option_object.country then
+        response_json_table["country"] = address_option_object.country;
+    elseif params and params["country"] then
+        response_json_table["country"] = params["country"];
+    else
+        response_json_table["country"] = "";
+    end
+    if params and params["language"] then
+        response_json_table["language"] = params["language"];
+    else
+        response_json_table["language"] = "";
+    end
+    if address_option_object.lat then
+        response_json_table["lat"] = address_option_object.lat;
+    end
+    if address_option_object.lng then
+        response_json_table["lng"] = address_option_object.lng;
+    end
+    
+    local response_json = pretty_json:encode_pretty( response_json_table );
+    if response_json then
+        return response_json, 200;
+    else
+        return  "{ \"error\": \"Postal Address API - unable to process request - building response error\" }\n", 500; 
+    end    
 end
 
 function _address.update_address( address_class_object, address_object )

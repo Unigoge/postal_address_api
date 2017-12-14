@@ -246,10 +246,10 @@ function _utils.wait_for_all_threads( threads )
     
 end
 
-local http  = require "resty.http"
-local cjson = require "cjson"
-
 function _utils.send_http_req( url, args )
+
+    local http  = require "resty.http";
+    -- local cjson = require "cjson";
 
     local httpc, err = http.new();
     if not httpc then
@@ -262,7 +262,12 @@ function _utils.send_http_req( url, args )
     
     httpc:set_timeouts( 10000, 10000, 40000 ); -- 10 sec to connect, 10 sec to send, 40 seconds to read
     
-    local res, err = httpc:request_uri( url, args );
+    -- local res, err = httpc:request_uri( url, args );
+    
+    local ok, res, err = pcall( httpc.request_uri, httpc, url, args );
+    if not ok then
+        return nil, res;
+    end
     if not res and err and err == "closed" then
         local op_status;
         op_status, err = httpc:close();
@@ -292,7 +297,7 @@ function _utils.send_http_req( url, args )
         
     end
     
-    if res and res.headers and res.headers["content-type"] and not str.find( res.headers["content-type"], "json" ) then
+    if res and res.headers and res.headers["content-type"] and not string.find( res.headers["content-type"], "json" ) then
         return nil, "not json";
     end
         

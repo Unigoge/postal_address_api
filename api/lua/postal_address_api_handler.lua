@@ -355,7 +355,7 @@ function _handler.process_address_insert_request( params )
         --
         local encoded_address = address_object.format_to_string( address_option );
         encoded_address = ngx.escape_uri( encoded_address );
-        local url = "http://maps.googleapis.com/maps/api/geocode/json?address=" .. encoded_address .. "&sensor=false"
+        local url = "https://maps.googleapis.com/maps/api/geocode/json?address=" .. encoded_address .. "&sensor=false&key=AIzaSyCYqvg4ihOlBEsgB823Mgtx5MQ7XXNs5K0"
         local google_response, err = utils.send_http_req( url, {
                                           method = "GET",
                                           headers = {
@@ -365,7 +365,7 @@ function _handler.process_address_insert_request( params )
         if not google_response then
             ngx.log( ngx.INFO, "Postal Address API - unable to insert address - Google request error: ", err );
         else
-            local ok, google_response_object = pcall( cjson.decode, google_response );
+            local ok, google_response_object = pcall( cjson.decode, google_response.body );
             if not ok or not google_response_object or type(google_response_object) ~= "table" then
                 ngx.log( ngx.INFO, "Postal Address API - Unable to parse Google JSON" );
             else
