@@ -52,6 +52,13 @@ local db_routing_table = {
         ["method"] = "GET"
     }
   },
+  ["mexico"] = {
+    ["driver"] = "google_map_api_lookup",
+    ["config"] = {
+        ["url"]  = "http://maps.googleapis.com/maps/api/geocode/json?sensor=false",
+        ["method"] = "GET"
+    }
+  },
   ["us"] = {
     ["driver"] = "mock_data_lookup",
     ["config"] = {
@@ -153,7 +160,7 @@ function _places.validate_address( self, address_object, language, country )
         -- try searching "places" DB for - ("city_district" and "state) or ("city" and "state")
         --
         -- since address_options is a queue - always use address_options[1]
-        ngx.log( ngx.INFO, "Postal Address API - quering DB for addres option:\n", utils.serializeTable( address_options[1] ) );
+        ngx.log( ngx.INFO, "Postal Address API - quering DB for address option:\n", utils.serializeTable( address_options[1] ) );
         local fetched_places = _places.query_db( "states", address_options[1], country );
         if fetched_places and type( fetched_places ) == "table" and #fetched_places ~= 0 then
             ngx.log( ngx.INFO, "Postal Address API - found places:\n", utils.serializeTable( fetched_places ) );
@@ -168,8 +175,10 @@ function _places.validate_address( self, address_object, language, country )
             --
             -- need to search "common_names" now
             --
-            local fetched_common_places = _places.query_db( "states", address_options[1], country );
+            ngx.log( ngx.INFO, "Postal Address API - quering common_names DB for address option:\n", utils.serializeTable( address_options[1] ) );
+            local fetched_common_places = _places.query_db( "common_names", address_options[1], country );
             if fetched_common_places and type( fetched_common_places ) == "table" and #fetched_common_places ~= 0 then
+                ngx.log( ngx.INFO, "Postal Address API - found common places:\n", utils.serializeTable( fetched_common_places ) );
                 local idx, place_record;
                 for idx, place_record in ipairs( fetched_common_places ) do
                     if place_record.postcode or place_record.routing_tag then
@@ -255,6 +264,8 @@ function _places.google_map_api_lookup( scope, address_option_object, config )
     
     if scope == "states" or scope == "common_names" then
     
+        local postal_address_addr_class = require "postal_address_api_addr_class";
+        
         local address_query = postal_address_addr_class.format_to_string( address_option_object );
 
         if #address_query == 0 then
@@ -319,7 +330,7 @@ local mock_db_data = {
             {
               ["city"]             = "basking ridge",
               ["city_alternative"] = "bernards",
-              ["state"]            = "new jersey",
+              ["state"]            = "nj",
               ["postcode"]         = "07920",
               ["routing_tag"]      = "07920"
             }
@@ -328,7 +339,7 @@ local mock_db_data = {
             {
               ["city"]             = "new providence",
               ["city_alternative"] =  nil,
-              ["state"]            = "new jersey",
+              ["state"]            = "nj",
               ["postcode"]         = "07974",
               ["routing_tag"]      = "default"
             }
@@ -339,21 +350,21 @@ local mock_db_data = {
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         = "10001",
               ["routing_tag"]      = "10001"
             },
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         = "10011",
               ["routing_tag"]      = "default"
             },
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         =  nil,
               ["routing_tag"]      = "default"
             }            
@@ -362,21 +373,21 @@ local mock_db_data = {
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         = "10001",
               ["routing_tag"]      = "10001"
             },
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         = "10011",
               ["routing_tag"]      = "default"
             },
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         =  nil,
               ["routing_tag"]      = "default"
             }            
@@ -385,105 +396,171 @@ local mock_db_data = {
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         = "10001",
               ["routing_tag"]      = "10001"
             },
             {
               ["city"]             = "new york",
               ["city_alternative"] = "nyc",
-              ["state"]            = "new york",
+              ["state"]            = "ny",
               ["postcode"]         =  nil,
               ["routing_tag"]      = "default"
             }
         }            
     },
-    ["common_names"] = {
+    ["common_names"] = { 
         ["brooklyn"] = {
-            ["name"]        = "brooklyn",
-            ["type"]        = "city_district",
-            ["city"]        = "new york",
-            ["state"]       = "ny",
-            ["country"]     = "us",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "brooklyn",
+              ["type"]        = "city_district",
+              ["city"]        = "new york",
+              ["state"]       = "ny",
+              ["country"]     = "us",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
         },
         ["empire state building"] = {
-            ["name"]        = "empire state building",
-            ["type"]        = "house",
-            ["city"]        = "new york",
-            ["state"]       = "ny",
-            ["country"]     = "us",
-            ["postcode"]    = "10118",
-            ["routing_tag"] = "default"
+            {
+              ["name"]        = "empire state building",
+              ["type"]        = "house",
+              ["city"]        = "new york",
+              ["state"]       = "ny",
+              ["country"]     = "us",
+              ["postcode"]    = "10118",
+              ["routing_tag"] = "default"
+            }
         },
         ["pennsylvania station"] = {
-            ["name"]        = "pennsylvania station",
-            ["type"]        = "house",
-            ["city"]        = "new york",
-            ["state"]       = "ny",
-            ["country"]     = "us",
-            ["postcode"]    = "10001",
-            ["routing_tag"] = "10001"
+            {
+              ["name"]        = "pennsylvania station",
+              ["type"]        = "house",
+              ["city"]        = "new york",
+              ["state"]       = "ny",
+              ["country"]     = "us",
+              ["postcode"]    = "10001",
+              ["routing_tag"] = "10001"
+            }
         },
         ["united states"] = {
-            ["name"]        = "united states",
-            ["type"]        = "country",
-            ["city"]        =  nil,
-            ["state"]       =  nil,
-            ["country"]     = "us",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "united states",
+              ["type"]        = "country",
+              ["city"]        =  nil,
+              ["state"]       =  nil,
+              ["country"]     = "us",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
         },        
         ["new jersey"] = {
-            ["name"]        = "new jersey",
-            ["type"]        = "state",
-            ["city"]        =  nil,
-            ["state"]       = "nj",
-            ["country"]     = "us",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "new jersey",
+              ["type"]        = "state",
+              ["city"]        =  nil,
+              ["state"]       = "nj",
+              ["country"]     = "us",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
         },
         ["new york"] = {
-            ["name"]        = "new york",
-            ["type"]        = "state",
-            ["city"]        =  nil,
-            ["state"]       = "ny",
-            ["country"]     = "us",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "new york",
+              ["type"]        = "state",
+              ["city"]        =  nil,
+              ["state"]       = "ny",
+              ["country"]     = "us",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
         },
         ["new york city"] = {
-            ["name"]        = "new york city",
-            ["type"]        = "city",
-            ["city"]        = "new york",
-            ["state"]       = "ny",
-            ["country"]     = "us",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "new york city",
+              ["type"]        = "city",
+              ["city"]        = "new york",
+              ["state"]       = "ny",
+              ["country"]     = "us",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
+        },
+        ["mexico"] = {
+            {
+              ["name"]        = "mexico",
+              ["type"]        = "city",
+              ["city"]        = "mexico city",
+              ["state"]       = "df",
+              ["country"]     = "mexico",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            },
+            {
+              ["name"]        = "mexico",
+              ["type"]        = "state",
+              ["city"]        =  nil,
+              ["state"]       = "mexico",
+              ["country"]     = "mexico",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            },
+            {
+              ["name"]        = "mexico",
+              ["type"]        = "country",
+              ["city"]        =  nil,
+              ["state"]       =  nil,
+              ["country"]     = "mexico",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
+        
         },
         ["quebec"] = {
-            ["name"]        = "quebec",
-            ["type"]        = "state",
-            ["city"]        =  nil,
-            ["state"]       = "qc",
-            ["country"]     = "canada",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "quebec",
+              ["type"]        = "state",
+              ["city"]        =  nil,
+              ["state"]       = "qc",
+              ["country"]     = "canada",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
         },        
         ["ontario"] = {
-            ["name"]        = "ontario",
-            ["type"]        = "state",
-            ["city"]        =  nil,
-            ["state"]       = "ot",
-            ["country"]     = "canada",
-            ["postcode"]    =  nil,
-            ["routing_tag"] =  nil
+            {
+              ["name"]        = "ontario",
+              ["type"]        = "state",
+              ["city"]        =  nil,
+              ["state"]       = "ot",
+              ["country"]     = "canada",
+              ["postcode"]    =  nil,
+              ["routing_tag"] =  nil
+            }
         }                        
     }
 };
 
+local function get_common_name_options( address_options, address_option_object, type )
+
+    local valid_options = {};
+    for idx, option in ipairs( address_options ) do
+        if address_option_object[ type ] and option.type == type
+            and address_option_object[ type ] == option.name then
+            
+            valid_options[ #valid_options + 1 ] = option;
+        end
+    end
+    
+    if #valid_options > 0 then return valid_options end
+    
+    return nil;
+end
+
 function _places.mock_data_lookup( scope, address_option_object, config )
+    
+    ngx.log( ngx.INFO, "Postal Address API - checking \"", scope, "\" for :\n", utils.serializeTable( address_option_object ) );
     
     if scope == "states" then
         -- a fast lookup - "state" AND "city" ( AND "postcode" - optional )
@@ -519,33 +596,54 @@ function _places.mock_data_lookup( scope, address_option_object, config )
     elseif scope == "common_names" then
         -- "house" OR "city_district" OR "city" OR "state"
         local db_records = {};
-        local idx, record;
-        for idx, record in ipairs( mock_db_data[ "common_names" ] ) do
+        local db_type_records = {};
+
+        local type, name, records;
+        for type, name in pairs( address_option_object ) do        
+            local name_records = mock_db_data[ "common_names" ][ name ];
+            if name_records then
+                db_type_records[ type ] = get_common_name_options( name_records, address_option_object, type );
+            end
+        end
         
-            if address_option_object.house and record["type"] == "house"
-               and address_option_object.house == record["name"] then
-               
-               db_records[ #db_records + 1 ] = record;
-               
-            elseif address_option_object.city_district and record["type"] == "city_district"
-               and address_option_object.city_district == record["name"] then
-               
-               db_records[ #db_records + 1 ] = record;
+        for type, records in pairs( db_type_records ) do
+        
+            local idx, record;
+            for idx, record in ipairs( records ) do
+            
+                ngx.log( ngx.INFO, "Postal Address API - checking common name:\n", utils.serializeTable( record ) );
                 
-            elseif address_option_object.city and record["type"] == "city"
-               and address_option_object.city == record["name"] then
-               
-               db_records[ #db_records + 1 ] = record;
-               
-            elseif address_option_object.state and record["type"] == "state"
-               and address_option_object.state == record["name"] then
-               
-               db_records[ #db_records + 1 ] = record;
-               
-            elseif address_option_object.country and record["type"] == "country"
-               and address_option_object.country == record["name"] then
-               
-               db_records[ #db_records + 1 ] = record;  
+                if address_option_object.house and record["type"] == "house"
+                   and address_option_object.house == record["name"] then
+                   
+                   db_records[ #db_records + 1 ] = record;
+                   break;
+                   
+                elseif address_option_object.city_district and record["type"] == "city_district"
+                   and address_option_object.city_district == record["name"] then
+                   
+                   db_records[ #db_records + 1 ] = record;
+                   break;
+                    
+                elseif address_option_object.city and record["type"] == "city"
+                   and address_option_object.city == record["name"] then
+                   
+                   db_records[ #db_records + 1 ] = record;
+                   break;
+                   
+                elseif address_option_object.state and record["type"] == "state"
+                   and address_option_object.state == record["name"] then
+                   
+                   db_records[ #db_records + 1 ] = record;
+                   break;
+                   
+                elseif address_option_object.country and record["type"] == "country"
+                   and address_option_object.country == record["name"] then
+                   
+                   db_records[ #db_records + 1 ] = record;  
+                   break;
+
+                end
             end
         end
         

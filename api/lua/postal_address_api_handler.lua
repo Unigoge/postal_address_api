@@ -295,7 +295,6 @@ function _handler.process_address_lookup_request( params )
                 running_threads = utils.wait_for_any_thread( threads );
             end
         end
-        ngx.log( ngx.INFO, "Postal Address API - processing address_option #", option_number );
         option_number = option_number + 1; 
     end
     

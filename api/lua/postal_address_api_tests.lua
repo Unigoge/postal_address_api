@@ -46,4 +46,32 @@ else
     tests_results[ #tests_results + 1 ] = { ["Test 3 - handler process_address_lookup_request"] = { ["status"] = "failed", ["error"] = response } };
 end
 
+-- Test 4 - API handler process_address_lookup_request( params ) 
+
+local ok, response, http_status = pcall( postal_address_api_handler.process_address_lookup_request, { ["address"] = "119 w 24th street, NYC, New York", ["language"] = "en", ["country"] = "us" } );
+if ok then
+    tests_results[ #tests_results + 1 ] = { ["Test 4 - handler process_address_lookup_request"] = { 
+                                                                              ["status"] = "ok", 
+                                                                              ["input"] = { ["address"] = "119 w 24th street, NYC, New York", ["language"] = "en", ["country"] = "us" }, 
+                                                                              ["output"] = response,
+                                                                              ["http_status"] = http_status
+                                                                            } };
+else
+    tests_results[ #tests_results + 1 ] = { ["Test 4 - handler process_address_lookup_request"] = { ["status"] = "failed", ["error"] = response } };
+end
+
+-- Test 5 - API handler process_address_lookup_request( params ) 
+
+local ok, response, http_status = pcall( postal_address_api_handler.process_address_lookup_request, { ["address"] = "Nezahualcoyotl 109, Mexico, DF, Mexico", ["language"] = "en" } );
+if ok then
+    tests_results[ #tests_results + 1 ] = { ["Test 5 - handler process_address_lookup_request"] = { 
+                                                                              ["status"] = "ok", 
+                                                                              ["input"] = { ["address"] = "Nezahualcoyotl 109, Mexico, DF, Mexico", ["language"] = "en" }, 
+                                                                              ["output"] = response,
+                                                                              ["http_status"] = http_status
+                                                                            } };
+else
+    tests_results[ #tests_results + 1 ] = { ["Test 5 - handler process_address_lookup_request"] = { ["status"] = "failed", ["error"] = response } };
+end
+
 return tests_results;

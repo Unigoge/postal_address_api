@@ -256,7 +256,7 @@ function _utils.send_http_req( url, args )
         return nil, "HTTP client's object is not initialized.";
     end
 
-    if( ( str.sub( url, 1, 6) == "https:" ) and ( args.ssl_verify == nil ) ) then
+    if( ( string.sub( url, 1, 6) == "https:" ) and ( args.ssl_verify == nil ) ) then
         args.ssl_verify = false;
     end
     
@@ -287,7 +287,7 @@ function _utils.send_http_req( url, args )
         else
             if not new_url_parts[3] then new_url_parts[3] = 80 end
         end
-        if str.sub( original_url_parts[4], 1, 2 ) == "/" then original_url_parts[4] = str.sub( original_url_parts[4], 2 ); end
+        if string.sub( original_url_parts[4], 1, 2 ) == "/" then original_url_parts[4] = string.sub( original_url_parts[4], 2 ); end
         res, err = httpc:request_uri( new_url_parts[1] .. "://" .. new_url_parts[2] .. ":" .. tostring(new_url_parts[3]) .. "/" .. original_url_parts[4], args );
         
     end
