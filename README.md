@@ -27,7 +27,7 @@ For example - by the end of this process the original address:
 will be expanded in to the address options set where the top of the set will include an address:
 
 ```
-119 west 24th street new york ny 10001
+119 west 24 street new york ny 10001
 ```
 
 And there will be a `"routing_tag"` attribute (which will correspond to 10001 zip code)
