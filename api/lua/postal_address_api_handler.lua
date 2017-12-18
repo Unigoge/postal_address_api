@@ -256,7 +256,8 @@ function _handler.process_address_lookup_request( params )
     local running_threads = 0;
     local option_number = 1;
     while( option_number <= address_object:get_number_of_address_options() ) do
-        local address_option = address_object:get_address_option( option_number );
+        local curr_option_number = option_number;
+        local address_option = address_object:get_address_option( curr_option_number );
         if not address_option then
             break;
         end
@@ -268,17 +269,18 @@ function _handler.process_address_lookup_request( params )
                 utils.wait_for_any_thread( all_threads, MAXNUMBEROFTHREADS );
             end
             
-            local thread_handle = ngx.thread.spawn( function( address_option, option_number )
+            local thread_handle = ngx.thread.spawn( function()
+            
                 total_running_threads = total_running_threads + 1;
                  
-                local ok, error = pcall( address_object.lookup_address_option, address_object, address_option );
+                local ok, error, is_found = pcall( address_object.lookup_address_option, address_object, address_option );
                 if not ok then
                     ngx.log( ngx.ERR, "Postal Address API - unable to execute address lookup - execution error. " );
                 end
                 if error then
                     ngx.log( ngx.INFO, "Postal Address API - unable to execute address lookup - error: ", error );
                 end
-                threads[ tostring( option_number) ] = nil; -- remove thread from waiting set
+                threads[ tostring( curr_option_number) ] = nil; -- remove thread from waiting set
                 total_running_threads = total_running_threads - 1;
             end );
             
@@ -289,7 +291,7 @@ function _handler.process_address_lookup_request( params )
                 curr_thread_number = 1;
             end
             
-            threads[ tostring( option_number) ] = thread_handle;
+            threads[ tostring( curr_option_number) ] = thread_handle;
             running_threads = running_threads + 1;
             if running_threads == MAXNUMBEROFTHREADSPERADDRESS then
                 running_threads = utils.wait_for_any_thread( threads );
@@ -302,8 +304,32 @@ function _handler.process_address_lookup_request( params )
     
     local results = address_object:get_verified_address();
     if results then
-        -- found a correct address with known lat/lng
-        return address_object.format_to_json( results ), 200;
+        -- found at least one correct address with known lat/lng
+        local response_json = address_object.format_to_json( results, params );
+        if address_object:get_number_of_address_options() > 0 then
+            
+            local address_options = {};
+            option_number = 1;
+            while( option_number <= address_object:get_number_of_address_options() ) do
+                local address_option = address_object:get_address_option( option_number );
+                
+                -- should include only options with lat/long
+                -- check if addresses of references to results and address_option are different
+                if ( address_option ~= results) and address_option.lat and address_option.lng then
+                    address_options[ #address_options + 1 ] = address_object.format_to_string( address_option );
+                end
+                option_number = option_number + 1;
+            end
+
+            if #address_options > 0 then
+                local options_json = pretty_json:encode_pretty( address_options );
+                if options_json then
+                    -- construct a proper JSON response 
+                    response_json = "{\n" .. string.sub( response_json, 3, #response_json - 3 ) .. ",\n  \"options\": " .. options_json .. "\n}";
+                end
+            end
+        end
+        return response_json, 200;
     else
         -- not found - return error and include address options
         results = {};
@@ -347,13 +373,17 @@ function _handler.process_address_insert_request( params )
         return "{ \"error\": \"Postal Address API - unable to process request - error: " .. error .. "\" }\n", 500;        
     end
     
-    -- going to use the first addres option
-    local address_option = address_object:get_address_option( 1 );
+    local expanded_address = address_object:get_address_option(); -- it should return addess with the same postcode as inside params.address
+    if not expanded_address then
+        ngx.log( ngx.INFO, "Postal Address API - unable to validate address" );
+        return "{ \"error\": \"Postal Address API - unable to validate address\" }\n", 404;            
+    end
+    
     if not params.lat or not params.lng then
         --
         -- going to cheat here - will send request to Google trying to find lat/long
         --
-        local encoded_address = address_object.format_to_string( address_option );
+        local encoded_address = address_object.format_to_string( expanded_address );
         encoded_address = ngx.escape_uri( encoded_address );
         local url = "https://maps.googleapis.com/maps/api/geocode/json?address=" .. encoded_address .. "&sensor=false&key=AIzaSyCYqvg4ihOlBEsgB823Mgtx5MQ7XXNs5K0"
         local google_response, err = utils.send_http_req( url, {
@@ -386,10 +416,18 @@ function _handler.process_address_insert_request( params )
         ngx.log( ngx.INFO, "Postal Address API - unable to insert address - missing lat/long" );
         return "{ \"error\": \"Postal Address API - unable to insert address - missing lat/long\" }\n", 400;            
     end
+
+    local error, is_found = address_object:lookup_address_option( expanded_address );
+    if error then
+        ngx.log( ngx.INFO, "Postal Address API - unable to execute address lookup - error: ", error );
+    end
+    if is_found then
+        ngx.log( ngx.INFO, "Postal Address API - lat/long information already exists for address ", address_object.format_to_string( expanded_address ) );
+    end
     
-    error = address_object:insert_address( address_option, params.lat, params.lng );
+    error = address_object:insert_address( expanded_address, params.lat, params.lng );
     if not error then
-        return address_object.format_to_json( address_object:get_verified_address() ), 201;
+        return address_object.format_to_json( address_object:get_verified_address(), params ), 201;
     else
         ngx.log( ngx.ERR, "Postal Address API - unable to insert address - insertion error: ", error );
         return "{ \"error\": \"Postal Address API - unable to insert address - insertion error\" }\n", 500;            

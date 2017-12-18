@@ -104,7 +104,7 @@ function _places.query_db( scope, address_object, country )
             routing_table = db_routing_table[ "default" ];
         end
         if routing_table then
-            ngx.log( ngx.INFO, "Postal Address API - using driver ", routing_table.driver, " for country ", country );
+            -- ngx.log( ngx.DEBUG, "Postal Address API - using driver ", routing_table.driver, " for country ", country );
             if routing_table.driver and routing_table.config and _places[ routing_table.driver ] then
                 return _places[ routing_table.driver ]( scope, address_object, routing_table.config );
             end
@@ -163,10 +163,10 @@ function _places.validate_address( self, address_object, language, country )
         -- try searching "places" DB for - ("city_district" and "state) or ("city" and "state")
         --
         -- since address_options is a queue - always use address_options[1]
-        ngx.log( ngx.INFO, "Postal Address API - quering DB for address option:\n", utils.serializeTable( address_options[1] ) );
+        -- ngx.log( ngx.DEBUG, "Postal Address API - quering DB for address option:\n", utils.serializeTable( address_options[1] ) );
         local fetched_places = _places.query_db( "states", address_options[1], country );
         if fetched_places and type( fetched_places ) == "table" and #fetched_places ~= 0 then
-            ngx.log( ngx.INFO, "Postal Address API - found places:\n", utils.serializeTable( fetched_places ) );
+            -- ngx.log( ngx.DEBUG, "Postal Address API - found places:\n", utils.serializeTable( fetched_places ) );
             local idx, place_record;
             for idx, place_record in ipairs( fetched_places ) do
                 if place_record.postcode or place_record.routing_tag then
@@ -178,10 +178,10 @@ function _places.validate_address( self, address_object, language, country )
             --
             -- need to search "common_names" now
             --
-            ngx.log( ngx.INFO, "Postal Address API - quering common_names DB for address option:\n", utils.serializeTable( address_options[1] ) );
+            -- ngx.log( ngx.DEBUG, "Postal Address API - quering common_names DB for address option:\n", utils.serializeTable( address_options[1] ) );
             local fetched_common_places = _places.query_db( "common_names", address_options[1], country );
             if fetched_common_places and type( fetched_common_places ) == "table" and #fetched_common_places ~= 0 then
-                ngx.log( ngx.INFO, "Postal Address API - found common places:\n", utils.serializeTable( fetched_common_places ) );
+                -- ngx.log( ngx.DEBUG, "Postal Address API - found common places:\n", utils.serializeTable( fetched_common_places ) );
                 local idx, place_record;
                 for idx, place_record in ipairs( fetched_common_places ) do
                     if place_record.postcode or place_record.routing_tag then
@@ -294,34 +294,47 @@ function _places.google_map_api_lookup( scope, address_option_object, config )
             local ok, google_response_object = pcall( cjson.decode, google_response.body );
             if not ok or not google_response_object or type(google_response_object) ~= "table" then
                 ngx.log( ngx.INFO, "Postal Address API - Unable to parse Google API JSON" );
-            else
-                if google_response_object.results and google_response_object.results[1] then
-                    google_response_object = google_response_object.results[1];
-                end
-                if google_response_object and google_response_object["address_components"] then
-                    local city_record = {};
-                    local idx, address_component;
-                    for idx, address_component in ipairs( google_response_object["address_components"] ) do
+            elseif google_response_object.results and google_response_object.results[1] then
+                
+                local places_array = {};
+                local google_response_result;
+                for _, google_response_result in ipairs( google_response_object.results ) do
+
+                    local place_record = {};
+                    local address_component;
+                    for _, address_component in ipairs( google_response_result["address_components"] ) do
                         local i, type;
                         for i, type in ipairs( address_component.types ) do
                             if type == "locality" then
-                                city_record["city"] = address_component["long_name"];
+                                place_record["city"] = address_component["long_name"];
+                            elseif type == "sublocality_level_1" then
+                                place_record["city_district"] = address_component["long_name"];
                             elseif type == "administrative_area_level_1" then
-                                city_record["state"] = address_component["short_name"];
+                                place_record["state"] = address_component["short_name"];
                             elseif type == "postal_code" then
-                                city_record["postcode"] = address_component["short_name"];
-                            elseif type == "country" then
-                                city_record["country"] = address_component["long_name"];
+                                place_record["postcode"] = address_component["short_name"];
+                            elseif type == "country" and address_component["short_name"] ~= "US" then
+                                place_record["country"] = address_component["long_name"];
+                                place_record["routing_tag"] = address_component["short_name"];
+                            elseif type == "country" and address_component["short_name"] == "US" then
+                                place_record["routing_tag"] = "default";
                             end
                         end
                     end
-                    
-                    if city_record["city"] then
-                        city_record["routing_tag"] = city_record["postcode"];
-                        return { city_record };
-                    else
-                        return nil;
+                    if place_record["city"] then
+                        if place_record["country"] and place_record["postcode"] then
+                            place_record["routing_tag"] = place_record["postcode"] .. "-" .. place_record["routing_tag"];
+                        elseif place_record["postcode"] and place_record["routing_tag"] == "default" then
+                            place_record["routing_tag"] = place_record["postcode"];
+                        end
+                        places_array[ #places_array + 1 ] = place_record;
                     end
+                end
+                 
+                if #places_array > 0 then
+                    return places_array;
+                else
+                    return nil;
                 end
             end
         end
@@ -569,7 +582,7 @@ end
 
 function _places.mock_data_lookup( scope, address_option_object, config )
     
-    ngx.log( ngx.INFO, "Postal Address API - checking \"", scope, "\" for :\n", utils.serializeTable( address_option_object ) );
+    -- ngx.log( ngx.DEBUG, "Postal Address API - checking \"", scope, "\" for :\n", utils.serializeTable( address_option_object ) );
     
     if scope == "states" then
         -- a fast lookup - "state" AND "city" ( AND "postcode" - optional )
@@ -611,16 +624,18 @@ function _places.mock_data_lookup( scope, address_option_object, config )
         for type, name in pairs( address_option_object ) do        
             local name_records = mock_db_data[ "common_names" ][ name ];
             if name_records then
+                -- ngx.log( ngx.DEBUG, "Postal Address API - for name \"", name, "\" and type \"", type, "\" found records:\n", utils.serializeTable( name_records ) );
                 db_type_records[ type ] = get_common_name_options( name_records, address_option_object, type );
             end
         end
+        -- ngx.log( ngx.DEBUG, "Postal Address API - found \"common_names\" db records:\n", utils.serializeTable( db_type_records ) );
         
         for type, records in pairs( db_type_records ) do
         
             local idx, record;
             for idx, record in ipairs( records ) do
             
-                ngx.log( ngx.INFO, "Postal Address API - checking common name:\n", utils.serializeTable( record ) );
+                -- ngx.log( ngx.DEBUG, "Postal Address API - for \"", type, "\" checking common name:\n", utils.serializeTable( record ) );
                 
                 if address_option_object.house and record["type"] == "house"
                    and address_option_object.house == record["name"] then

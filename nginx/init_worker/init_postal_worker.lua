@@ -14,8 +14,13 @@ if ngx.worker.id() == 0 then
      
         local tests = require "postal_address_api_tests";
         local tests_results = tests.run();
-         
-        ngx.log( ngx.INFO, "Postal API - finished running tests - results: ", utils.serializeTable( tests_results ) );
+        
+        ngx.log( ngx.INFO, "Postal API - finished running tests." );
+        
+        local test_result;
+        for _, test_result in ipairs( tests_results ) do 
+            ngx.log( ngx.INFO, "Postal API - test result: ", utils.serializeTable( test_result ) );
+        end
      end );
      if not ok then
         ngx.log( ngx.ERR, "Postal API - unable to start tests - error: ", err );
