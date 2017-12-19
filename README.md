@@ -36,7 +36,7 @@ For each address option the API will construct a "key" (using `"house_number"`, 
 
 By the end of "lookup" processing the API will return an address with valid "lat/long" and with highest "weight" within address options set.
 
-##The performance
+#The performance
 
 On old laptop (converted to Linux machine - Ubuntu 16.04) - Nginx was configured to run 1 worker process (uses 1 CPU core to process all requests - running `ab` on the same machine to simulate 50 concurent connections:
 ```
