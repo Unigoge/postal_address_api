@@ -100,11 +100,15 @@ function _router.route_request()
 
     local request_endpoint_version = postal_address_api_version;
     if ngx.var["postal_addres_api_version"] and #ngx.var["postal_addres_api_version"] > 0 then
-        request_endpoint_root = ngx.var["postal_addres_api_version"];
+        request_endpoint_version = ngx.var["postal_addres_api_version"];
     end
+
+    -- ngx.log( ngx.DEBUG, "Postal Address API - serving endpoint ", request_endpoint_root .. "/" .. request_endpoint_version );
     
     local request_url = string.gsub( request_url, request_endpoint_root .. "/" .. request_endpoint_version, "" );
-        
+    
+    -- ngx.log( ngx.DEBUG, "Postal Address API - routing URL: ", request_url );
+     
     -- execute router (which will invoke a proper request's handler)
     local execute_status, routing_status, response, http_status = pcall( function ()
         local ok, response_data, response_status = r:execute(
@@ -116,6 +120,11 @@ function _router.route_request()
               
         return ok, response_data, response_status;
     end );
+    
+    if not execute_status and not response then
+        ngx.log( ngx.ERR, "Postal Address API - routing execution failed - ", routing_status );
+        response = "Internal server error."
+    end
     
     if not ngx.ctx.is_connected then ngx.exit(499); return; end -- Nginx expects 499 for aborted requests
     
@@ -138,7 +147,7 @@ function _router.route_request()
      
     if execute_status and routing_status then
           ngx.status = http_status;
-          ngx.print( response );
+          ngx.print( response .. "\n" );
           ngx.exit(ngx.status);
     elseif execute_status then
           ngx.status = 404;

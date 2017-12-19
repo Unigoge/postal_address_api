@@ -27,10 +27,13 @@ function _handler.make_address_lookup_handler()
             return "{ \"error\": \"Postal Address API - unable to process request - wrong HTTP method\" }\n", 400;
         end
     
+        -- ngx.log( ngx.DEBUG, "Postal Address API - processing GET requests - params:\n", utils.serializeTable(params) );
+        
         if params.address and #params.address > 4 then -- the minimal length of address - like "home"
-            params.address = ngx.unescape_uri( params.address);
-            params.address = str.gsub( params.address, "+", " " );
+            params.address = ngx.unescape_uri( params.address );
+            params.address = string.gsub( params.address, "+", " " );
         end
+        
         if params.address and #params.address < 4 then
             ngx.log( ngx.ERR, "Postal Address API - address is too short - ", params.address );
             return "{ \"error\": \"Postal Address API - unable to process request - address is too short\" }\n", 400;        
@@ -237,6 +240,8 @@ function _handler.process_address_lookup_request( params )
         ngx.log( ngx.ERR, "Postal Address API - missing address" );
         return "{ \"error\": \"Postal Address API - unable to process request - missing address\" }\n", 400;
     end
+
+    -- ngx.log( ngx.DEBUG, "Postal Address API - processing lookup requests for addres: ", params.address );
 
     local address_object, error = postal_address_addr_class.get_new_address( params.address, params.language, params.country );
     if not address_object then
