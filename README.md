@@ -80,13 +80,13 @@ Percentage of the requests served within a certain time (ms)
 
 # The API
 
-GET
+### GET
 
 expects URL that end as `"../424+South+Maple+Ave+Basking+Ridge+NJ+07920?language=en&country=us"` (could also use `%20` for spaces or any other common URL encoding)
 
 "language" and "country" query parameters are optional
 
-POST
+### POST
 
 expects JSON body with an array of JSON objects:
 ```
@@ -98,7 +98,7 @@ expects JSON body with an array of JSON objects:
 
 "language" and "country" attributes are optional
 
-PUT
+### PUT
 
 expects JSON object with following attributes:
 
@@ -116,7 +116,7 @@ expects JSON object with following attributes:
 
 The address is expected to be free of typos and it should include all essential parts and postal code
 
-DELETE
+### DELETE
 
 expects URL that end as `"../424+South+Maple+Ave+Basking+Ridge+NJ+07920?language=en&country=us"` (could also use `%20` for spaces or any other common URL encoding)
 
