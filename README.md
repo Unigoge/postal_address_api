@@ -36,6 +36,48 @@ For each address option the API will construct a "key" (using `"house_number"`, 
 
 By the end of "lookup" processing the API will return an address with valid "lat/long" and with highest "weight" within address options set.
 
+##The performance
+
+On old laptop (converted to Linux machine - Ubuntu 16.04) - Nginx was configured to run 1 worker process (uses 1 CPU core to process all requests - running `ab` on the same machine to simulate 50 concurent connections:
+```
+Server Software:        openresty/1.11.2.2
+Server Hostname:        127.0.0.1
+Server Port:            8085
+
+Document Path:          /api/v0.1/address_lookup/119+west+24+street+New+York+NY
+Document Length:        102 bytes
+
+Concurrency Level:      50
+Time taken for tests:   45.468 seconds
+Complete requests:      100000
+Failed requests:        0
+Keep-Alive requests:    99950
+Total transferred:      68499750 bytes
+HTML transferred:       10200000 bytes
+Requests per second:    2199.37 [#/sec] (mean)
+Time per request:       22.734 [ms] (mean)
+Time per request:       0.455 [ms] (mean, across all concurrent requests)
+Transfer rate:          1471.25 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.1      0       5
+Processing:     2   23   1.1     23      69
+Waiting:        2   23   1.1     23      69
+Total:          7   23   1.1     23      70
+
+Percentage of the requests served within a certain time (ms)
+  50%     23
+  66%     23
+  75%     23
+  80%     23
+  90%     23
+  95%     23
+  98%     23
+  99%     24
+ 100%     70 (longest request)
+```
+
 # The API
 
 GET
